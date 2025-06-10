@@ -1,0 +1,129 @@
+\documentclass{beamer}
+\usepackage{graphicx} % Required for inserting images
+\usetheme{default}
+\usecolortheme{seahorse}
+\setbeamertemplate{footline}[frame number]
+
+\title{The Turnaway Study}
+\author{Mila Lewis-Peinado}
+\date{July 24th 2024}
+
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}
+\frametitle{Introduction}
+Goal of the study: describe mental, physical, and socioeconomic effect of getting a wanted abortion vs. getting denied for a wanted abortion
+
+\begin{itemize}
+    \item Advancing New Standards in Reproductive Health (ANSIRH) at UCSF
+\end{itemize}
+\begin{itemize}
+    \item Gap in research
+\end{itemize}
+Focus on study design and statistical analysis
+\end{frame}
+
+\begin{frame}{Study Design: Groups}
+    \begin{itemize}
+        \item First trimester abortion group
+    \end{itemize}
+    \begin{itemize}
+        \item Near limit group : Women who sought an abortion up to two weeks under the facility’s gestational limit and received an abortion
+    \end{itemize}
+    \begin{itemize}
+        \item Turnaway group: Women who sought an abortion up to three weeks over the gestational limit and were turned away without receiving an abortion 
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Study Design: Recruitment}
+\begin{itemize}
+    \item Recruitment was from Jan 2008 to Dec 2010
+    \begin{itemize}
+        \item Interviews ended Jan 2016
+    \end{itemize}
+\end{itemize}
+\begin{itemize}
+    \item Natural experiment in 1:2:1 ratio
+\end{itemize}
+\begin{itemize}
+    \item 30 facilities
+\end{itemize}
+\begin{itemize}
+    \item Inclusion criteria: English/Spanish speaking, 15 y/o or older, no fetal anomalies
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Study Design: Flowchart}
+    \begin{figure}
+        \centering
+        \includegraphics[width=1\linewidth]{flowchart.png}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Study Design: Incentives}
+    \begin{itemize}
+        \item Facilities: 1000 USD each quarter of the recruitment period
+    \end{itemize}
+        \begin{itemize}
+        \item Staff: 15 USD gift cards every few months, chocolate, flowers, cards
+    \end{itemize}
+    \begin{itemize}
+        \item Participants
+            \begin{itemize}
+        \item Informed consent: 15 USD gift card
+    \end{itemize}
+        \begin{itemize}
+        \item 50 USD gift card after each interview
+    \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Statistical Analysis: Linear Mixed Effects Models}
+    \begin{itemize}
+    \item Pros: takes correlations into account (individual and facility), easier to understand than generalized estimating equation, good for longitudinal study
+\end{itemize}
+\begin{itemize}
+    \item Cons: makes a lot of assumptions
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Statistical Analysis: Model Equation}
+\begin{align*}
+Y_{ijt} =\ & \beta_0 + \beta_{0i} + \beta_{0ij} \\
+& + \beta_1 (First Trimester) + \beta_2 (Turnaway No Birth) \\
+& + \beta_3 (Turnaway Birth) + \beta_4 t \\
+& + \beta_5 t (First Trimester) + \beta_6 t (Turnaway No Birth) \\
+& + \beta_7 t (Turnaway Birth) + \beta_8 (BaselineAge) \\
+& + \beta_9 (BaselineParity) + \beta_{10} (BaselineHousehold Structure) \\
+& + \beta_{11} Y_{0ij} + \epsilon_{ij}
+\end{align*}
+\end{frame}
+
+\begin{frame}{Results}
+\begin{itemize}
+    \item Most outcomes groups were similar at baseline
+    \begin{itemize}
+        \item Age, parity and household structure are different at baseline \end{itemize}
+\end{itemize}    
+\begin{itemize}
+    \item Mental Health (measured suicidal ideation, depression, anxiety symptoms, quality of life): more stress, less life satisfaction, and was less likely to set ambitious goals
+\end{itemize}
+
+\begin{itemize}
+    \item Financial Wellbeing (personal income, household structure, public assistance): increase in poverty, decrease in employment
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Further Steps}
+
+\begin{figure}
+        \centering
+        \includegraphics[width=0.8\linewidth]{travel.png}
+    \end{figure}
+
+\tiny Source: The New York Times. https://www.nytimes.com/interactive/2024/06/13/us/abortion-state-laws-ban-travel.html 
+\end{frame}
+\end{document}
