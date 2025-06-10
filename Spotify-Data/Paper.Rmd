@@ -23,8 +23,8 @@ library(ggridges)
 
 ```{r ids}
 #these are my IDs, use your own! 
-id = '9343fb75cad24dacb1b245b036fa82f0'
-secret = '702ca111c0ed4711967a464f718140d8'
+id = '****'
+secret = '****'
 
 #don't change the code for this, just run it
 Sys.setenv(SPOTIFY_CLIENT_ID = id)
