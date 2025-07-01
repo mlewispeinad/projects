@@ -1,0 +1,252 @@
+---
+title: 'Exploring Math Wikipedia Page Views'
+authors: 'Jiaze He, Mila Lewis-Peinado, Michael Weagle'
+date: "2025-03-12"
+output: 
+  ioslides_presentation: default
+  slidy_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(jsonlite)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(shiny)
+library(rsconnect)
+library(igraph)
+library(pandoc)
+library(ggraph)
+```
+
+## Research Question & Motivation
+
+-   What is the general publics interaction with Mathematics?
+
+-   We will examine this question through analysis of page view statistics for Math-related Wikipedia articles
+
+-   Outline:
+
+1.  Overview of data set
+
+2.  Wikipedia page connection graph
+
+3.  Viewership Statistics
+
+4.  Relevant events impacting page views
+
+## Math Wikipedia Dataset
+
+-   Wikipedia Math Essentials from UCI Machine Learning Repository. (<https://archive.ics.uci.edu/dataset/605/wikipedia+math+essentials>)
+
+-   Daily view count data for 1068 Wikipedia pages related to Mathematics and Statistics, over period of 2 years, with one instance per page per day
+
+-   Period in question: March 16, 2019 - March 15, 2021
+
+
+-   Variables: Page Name, Date, View Count, Edges (number of hyperlinks with other pages)
+
+```{r view of data, echo=FALSE}
+setwd("/Users/michaelweagle/Desktop/Math_Wikipedia")
+df <- read.csv("MathWikipediaCorrected.csv")
+colnames(df)[3] <- 'Edges'
+head(df)
+```
+
+## Wikipedia Page Connection Map
+
+```{r jiazhe plot, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+# 加载必要的包（使用 requireNamespace 检查包是否安装）
+# 定义 JSON 文件路径，并检查文件是否存在
+#file_path <- "/Users/milal/Documents/STAT633/project1/wikivital_mathematics.json"
+
+
+setwd("/Users/michaelweagle/Desktop/Math_Wikipedia")
+
+# 读取 JSON 数据，并检查是否包含必需字段
+data <- fromJSON('wikivital_mathematics.json')
+required_fields <- c("edges", "weights")
+
+# 构建无向图对象，并为边设置权重
+g <- graph_from_data_frame(d = data[["edges"]], directed = FALSE)
+E(g)$weight <- data[["weights"]]
+
+# 1. 利用 Louvain 算法进行社区检测（考虑边权重）
+communities <- cluster_louvain(g, weights = E(g)$weight)
+membership <- communities$membership
+# 将社区信息赋给节点，并转为因子以便后续着色
+V(g)$community <- as.factor(membership)
+
+# 重命名社区因子水平：假设社区编号从1到8
+levels(V(g)$community) <- c("Applied Math", "Number Theory", "(Abstract) Algebra",
+                             "Geometry", "Calculus (Analysis)", "Logic", "Statistics",
+                             "Combinatorics")
+
+# 2. 收缩图：将同一社区的节点合并为超级节点
+# vertex.attr.comb 指定合并节点时如何处理属性，这里保留第一个节点的 name 属性
+g_contract <- contract.vertices(g, membership, vertex.attr.comb = list(name = function(x) x[1]))
+
+# 3. 计算收缩图的全局布局，这里采用 layout_in_circle 使社区均匀分布
+layout_contract <- layout_in_circle(g_contract)
+
+# 设置全局缩放因子和局部缩放因子：
+# global_scaling 用于放大各社区中心之间的距离
+# local_scaling 用于压缩社区内部的节点分布，使其聚集在社区中心附近
+global_scaling <- 3    # 调大可增加社区间的间距
+local_scaling <- 0.3   # 调小可让同一社区内部节点更集中
+
+# 为方便后续处理，将全局社区中心位置保存为列表（社区标签假设为数字且排序后与 g_contract 的顶点顺序一致）
+global_positions <- lapply(1:nrow(layout_contract), function(i) layout_contract[i,])
+names(global_positions) <- sort(unique(membership))
+
+# 4. 为每个社区计算局部布局，并与全局布局相结合
+final_layout <- matrix(NA, nrow = vcount(g), ncol = 2)
+
+for (comm in sort(unique(membership))) {
+  # 提取该社区内的节点索引
+  node_indices <- which(membership == comm)
+  # 构建社区子图
+  subg <- induced_subgraph(g, node_indices)
+  # 计算局部布局（采用 Fruchterman-Reingold 算法）
+  local_layout <- layout_with_fr(subg, weights = E(subg)$weight)
+  # 居中局部布局：使社区内节点围绕 (0,0) 分布
+  local_layout_centered <- sweep(local_layout, 2, colMeans(local_layout))
+ 
+  # 获取该社区的全局中心位置，并应用全局缩放
+  offset <- global_positions[[as.character(comm)]] * global_scaling
+ 
+  # 合并局部布局和全局偏移（局部布局乘以 local_scaling 控制社区内散布程度）
+  final_layout[node_indices, ] <- local_layout_centered * local_scaling +
+    matrix(offset, nrow = length(node_indices), ncol = 2, byrow = TRUE)
+}
+
+# 5. 使用手动布局将自定义坐标传入 ggraph
+node_layout <- create_layout(g, layout = "manual", x = final_layout[,1], y = final_layout[,2])
+
+# 6. 绘制网络图：节点颜色依据社区分组显示，边宽度根据权重调整
+
+plot <- ggraph(node_layout) +
+  geom_edge_link(aes(width = weight, filter = weight >= 4), edge_alpha = 0.8) +
+  geom_node_point(aes(color = community), size = 3) +
+  scale_edge_width(guide = "none") +
+  theme_void()
+
+
+# 显示图形
+plot
+```
+
+## Top 50 Connected Pages
+
+```{r connections, echo=FALSE}
+
+connection_summary <- df %>%
+  group_by(Page) %>%
+  summarize(Total_Connections = sum(Edges)) %>%
+  arrange(desc(Total_Connections)) %>%
+  top_n(50, Total_Connections)
+
+ggplot(connection_summary, aes(x = reorder(Page, -Total_Connections), y = Total_Connections)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  theme_minimal() +
+  labs(title = "Total Connections per Wikipedia Page",
+       x = "Page",
+       y = "Number of Connections") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Most Viewed Pages
+
+```{r}
+setwd("/Users/michaelweagle/Desktop/Math_Wikipedia")
+df1 <- df %>%
+  group_by(Page) %>%
+  summarise(Views = sum(Views)) %>%
+  arrange(desc(Views))
+df1
+```
+
+## Average Number of Views per Weekday
+
+```{r heatmap, echo=FALSE}
+suppressWarnings({
+
+heatmap_data <- df %>%
+  mutate(Weekday = wday(Date, label = TRUE),
+         Month = month(Date, label = TRUE)) %>%
+  group_by(Weekday, Month) %>%
+  summarize(Avg_Views = mean(Views), .groups = "drop")
+
+ggplot(heatmap_data, aes(x = Weekday, y = Month, fill = Avg_Views)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  labs(title = "Heatmap of Average Math-Related Wikipedia Page Views",
+       x = "Day of Week",
+       y = "Month",
+       fill = "Average Number of Views")
+})
+```
+
+## Math Wikipedia and Media
+
+-   Question: What types of events influence public interests in Mathematics, and can we quantify this through Wikipedia page views?
+-   What do the sources of these sparks in interest tell us about the best way to promote Mathematics to a wider audience?
+-   Three cases: Math related holidays, mainstream press stories, and Youtube videos
+
+## Shiny App
+
+<https://mlewispeinad.shinyapps.io/project1/>
+
+-   Allows us to filter through different Math Wikipedia pages and date ranges
+
+## Case 1: Math Holidays
+
+-   Two notable Math holidays
+
+-   Pi Day (March 14)
+
+-   Fibonacci Day (November 23)
+
+::: {style="text-align: center;"}
+![](https://i.redd.it/dd2w9bqh5o4b1.png){width="400"}
+:::
+
+## Case 2: Mainstream Media Articles
+
+-   From examining archived articles from publications such as the New York Times, Math related articles are few and far between in the mainstream press.
+-   Common type of Math-related news article: Obituaries for famous Mathematicians
+-   Example: John Horton Conway (26 December 1937 – 11 April 2020), known for his contributions to both academic and recreational Mathematics, for example Coding Theory
+
+::: {style="text-align: center;"}
+![](https://ichef.bbci.co.uk/images/ic/320x320/p08b9bd6.jpg){width="200"}
+:::
+
+## Exponential Growth
+
+-   Early during the COVID pandemic, many people were curious about how the virus was spreading so quickly, leading to talk about the Mathematics behind 'Exponential Growth'.
+
+::: {style="text-align: center;"}
+![](images/expog.png){width="500"}
+:::
+
+## Case 3: Youtube
+
+-   Youtube has served as a thriving community for exposing Mathematics to a general audience
+-   Example: 3Blue1Brown (Grant Sanderson), known for producing accessible videos on advanced topics in Math and Science with slick animations
+-   7 Million subscribers as of 2025
+
+::: {style="text-align: center;"}
+![](data:image/png;base64,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){alt="3Blue1Brown | Knot Theory Tie – DFTBA" width="298"}
+
+![](https://mathematics.stanford.edu/sites/mathematics/files/styles/hs_medium_square_360x360/public/media/image/sanderson_grant_0.png?h=8cd830a5&itok=sboDiPUH){alt="Stanford Math Alumnus, Grant Sanderson, to Receive Communications Award  from AMS | Mathematics" width="200"}
+:::
+
+## Conclusion
+
+-   Given the prevalence of Wikipedia in many of our everyday lives, we can learn a lot about societies relationship with Mathematics through examining trends on Wikipedia
+-   An important takeaway is that alternative media outlets, such Youtube, are more effective at promoting interest in Mathematics than the traditional press
+-   Happy early Pi Day!
