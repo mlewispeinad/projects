@@ -50,7 +50,7 @@ library(ggraph)
 -   Variables: Page Name, Date, View Count, Edges (number of hyperlinks with other pages)
 
 ```{r view of data, echo=FALSE}
-setwd("/Users/michaelweagle/Desktop/Math_Wikipedia")
+setwd("**")
 df <- read.csv("MathWikipediaCorrected.csv")
 colnames(df)[3] <- 'Edges'
 head(df)
@@ -59,74 +59,64 @@ head(df)
 ## Wikipedia Page Connection Map
 
 ```{r jiazhe plot, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
-# 加载必要的包（使用 requireNamespace 检查包是否安装）
-# 定义 JSON 文件路径，并检查文件是否存在
-#file_path <- "/Users/milal/Documents/STAT633/project1/wikivital_mathematics.json"
+#file_path <- "**/wikivital_mathematics.json"
 
 
-setwd("/Users/michaelweagle/Desktop/Math_Wikipedia")
-
-# 读取 JSON 数据，并检查是否包含必需字段
 data <- fromJSON('wikivital_mathematics.json')
 required_fields <- c("edges", "weights")
 
-# 构建无向图对象，并为边设置权重
 g <- graph_from_data_frame(d = data[["edges"]], directed = FALSE)
 E(g)$weight <- data[["weights"]]
 
-# 1. 利用 Louvain 算法进行社区检测（考虑边权重）
+
 communities <- cluster_louvain(g, weights = E(g)$weight)
 membership <- communities$membership
-# 将社区信息赋给节点，并转为因子以便后续着色
+
 V(g)$community <- as.factor(membership)
 
-# 重命名社区因子水平：假设社区编号从1到8
+
 levels(V(g)$community) <- c("Applied Math", "Number Theory", "(Abstract) Algebra",
                              "Geometry", "Calculus (Analysis)", "Logic", "Statistics",
                              "Combinatorics")
 
-# 2. 收缩图：将同一社区的节点合并为超级节点
-# vertex.attr.comb 指定合并节点时如何处理属性，这里保留第一个节点的 name 属性
+
 g_contract <- contract.vertices(g, membership, vertex.attr.comb = list(name = function(x) x[1]))
 
-# 3. 计算收缩图的全局布局，这里采用 layout_in_circle 使社区均匀分布
 layout_contract <- layout_in_circle(g_contract)
 
-# 设置全局缩放因子和局部缩放因子：
-# global_scaling 用于放大各社区中心之间的距离
-# local_scaling 用于压缩社区内部的节点分布，使其聚集在社区中心附近
-global_scaling <- 3    # 调大可增加社区间的间距
-local_scaling <- 0.3   # 调小可让同一社区内部节点更集中
 
-# 为方便后续处理，将全局社区中心位置保存为列表（社区标签假设为数字且排序后与 g_contract 的顶点顺序一致）
+global_scaling <- 3   
+local_scaling <- 0.3   
+
+
 global_positions <- lapply(1:nrow(layout_contract), function(i) layout_contract[i,])
 names(global_positions) <- sort(unique(membership))
 
-# 4. 为每个社区计算局部布局，并与全局布局相结合
+
 final_layout <- matrix(NA, nrow = vcount(g), ncol = 2)
 
 for (comm in sort(unique(membership))) {
-  # 提取该社区内的节点索引
+
   node_indices <- which(membership == comm)
-  # 构建社区子图
+
   subg <- induced_subgraph(g, node_indices)
-  # 计算局部布局（采用 Fruchterman-Reingold 算法）
+
   local_layout <- layout_with_fr(subg, weights = E(subg)$weight)
-  # 居中局部布局：使社区内节点围绕 (0,0) 分布
+
   local_layout_centered <- sweep(local_layout, 2, colMeans(local_layout))
  
-  # 获取该社区的全局中心位置，并应用全局缩放
+
   offset <- global_positions[[as.character(comm)]] * global_scaling
  
-  # 合并局部布局和全局偏移（局部布局乘以 local_scaling 控制社区内散布程度）
+
   final_layout[node_indices, ] <- local_layout_centered * local_scaling +
     matrix(offset, nrow = length(node_indices), ncol = 2, byrow = TRUE)
 }
 
-# 5. 使用手动布局将自定义坐标传入 ggraph
+
 node_layout <- create_layout(g, layout = "manual", x = final_layout[,1], y = final_layout[,2])
 
-# 6. 绘制网络图：节点颜色依据社区分组显示，边宽度根据权重调整
+
 
 plot <- ggraph(node_layout) +
   geom_edge_link(aes(width = weight, filter = weight >= 4), edge_alpha = 0.8) +
@@ -135,7 +125,6 @@ plot <- ggraph(node_layout) +
   theme_void()
 
 
-# 显示图形
 plot
 ```
 
@@ -161,7 +150,6 @@ ggplot(connection_summary, aes(x = reorder(Page, -Total_Connections), y = Total_
 ## Most Viewed Pages
 
 ```{r}
-setwd("/Users/michaelweagle/Desktop/Math_Wikipedia")
 df1 <- df %>%
   group_by(Page) %>%
   summarise(Views = sum(Views)) %>%
