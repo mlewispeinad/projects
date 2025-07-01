@@ -1,0 +1,253 @@
+---
+title: 'Final Presentation: Group 1'
+author: "Mia Josephy-Zack, Alex Medeiros, Mila Lewis-Peinado"
+output: ioslides_presentation
+date: "2025-05-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+squirrels <- read.csv("squirrel-data.csv")
+parks <- read.csv("park-data.csv")
+tree <- read.csv("NYC-parkdata.csv")
+data <- left_join(squirrels, parks, by = c("Park.ID", "Park.Name", "Area.Name", "Area.ID"))
+full_data <- left_join(data, tree, by = c("Park.ID", "Park.Name"))
+
+# cleaning data: converting char to num
+full_data$Total.Acres <- as.numeric(full_data$Total.Acres)
+full_data$Number.of.Mapped.Trees <- as.numeric(full_data$Number.of.Mapped.Trees)
+full_data$Acres.of.Natural.Areas <- as.numeric(full_data$Acres.of.Natural.Areas)
+
+# cleaning data: converting char to num
+full_data$Total.Acres <- as.numeric(full_data$Total.Acres)
+full_data$Number.of.Mapped.Trees <- as.numeric(full_data$Number.of.Mapped.Trees)
+full_data$Acres.of.Natural.Areas <- as.numeric(full_data$Acres.of.Natural.Areas)
+
+# cleaning data cont.: cleaning up the comments
+
+# park condition variable
+full_data$Park.Conditions[full_data$Park.Conditions == "Calm, 20\x8a\x97\x9630 ppl on each side"] <- "Calm"
+full_data$Park.Conditions <- ifelse(
+  grepl("calm", full_data$Park.Conditions, ignore.case = TRUE),
+  "Calm",
+  ifelse(
+    grepl("busy", full_data$Park.Conditions, ignore.case = TRUE),
+    "Busy",
+    NA
+  )
+)
+
+# litter variable
+full_data$Litter <- ifelse(
+  grepl("some", full_data$Litter, ignore.case = TRUE),
+  "Some",
+  ifelse(
+    grepl("abundant", full_data$Litter, ignore.case = TRUE),
+    "Abundant",
+    "None"
+  )
+)
+
+# human interaction variable
+# I coded the default to be indifferent, bc the ones that didn't mention
+# any keywords (runsfrom/approaches) sounded like indifference
+
+full_data$Interactions.with.Humans <- ifelse(
+  grepl("runs from", full_data$Interactions.with.Humans, ignore.case = TRUE),
+  "Runs from",
+  ifelse(
+    grepl("approaches", full_data$Interactions.with.Humans, ignore.case = TRUE),
+    "Approaches",
+    "Indifferent"
+  )
+)
+
+# rate variable: squirrels per acres
+
+# need to account for NA value (park with no total acres)
+
+full_data <- full_data %>%
+  mutate(Squirrel.rate = Number.of.Squirrels / Total.Acres)
+
+# Rename latitude and longitude variables
+full_data <- full_data %>%
+  rename(
+    lat = "Squirrel.Latitude..DD.DDDDDD.",
+    long = "Squirrel.Longitude...DD.DDDDDD."
+  )
+
+full_data$Squirrel.rate <- as.numeric(full_data$Squirrel.rate)
+
+# cleaning activities variable
+core_activities <- c("Foraging", "Eating", "Running", "Climbing", "Chasing", "Digging", "Sitting", "Sleeping")
+
+extract_activities_grepl <- function(activity_str) {
+  # na if missing
+  if (is.na(activity_str) || activity_str == "") return(NA)
+  
+  #checking for word
+  found <- core_activities[sapply(core_activities, function(act) grepl(act, activity_str, ignore.case = TRUE))]
+  
+  if (length(found) == 0) return(NA)
+  paste(found, collapse = ", ")
+}
+
+full_data$Cleaned.Activities <- sapply(full_data$Activities, extract_activities_grepl)
+
+# cleaning animal sightings variable
+animal_list <- c("dogs", "cat", "pigeons", "cardinals", "hawks", "rat", 
+                 "robins", "sparrows", "goose", "downy woodpecker", 
+                 "song birds", "fish", "humans", "geese")
+
+pattern <- paste(animal_list, collapse = "|")
+
+clean_animal_sighting_grepl <- function(sighting) {
+  if (is.na(sighting) || sighting == "") return(NA)
+  sighting <- gsub("\\([^\\)]*\\)", "", sighting)
+  sighting <- tolower(sighting)
+  matches <- unique(unlist(regmatches(sighting, gregexpr(pattern, sighting))))
+  if (length(matches) == 0) return(NA)
+  paste(matches, collapse = ", ")
+}
+
+full_data$Cleaned.Animal.Sightings <- sapply(full_data$Other.Animal.Sightings, clean_animal_sighting_grepl)
+
+#make rate group variable
+full_data <- full_data %>%
+  mutate(Rate.Group = case_when(
+    Squirrel.rate < 1.206 ~ "Low",
+    Squirrel.rate < 2.045 ~ "Medium",
+    Squirrel.rate < 5.231 ~ "High",
+    TRUE ~ "Very High"
+  ))
+```
+
+## Research Question
+
+- How do squirrel-human interactions differ across various NYC parks?
+  - Interested in environmental and atmosphere/ambiance factors
+  - Squirrels are important part of the NYC ecosystem & health of urban green spaces
+- Our hypothesis: Busier parks will have braver squirrels!
+  - Adaptation from exposure 
+
+## Our Dataset
+
+- Dataset source: The Squirrel Census sample from March 1st, 2020
+- 3 Datasets: Park dataset, Squirrel dataset, & Park Info dataset (NYCgovparks.org, made by us)
+  - Left-joined by common variables (area name, area ID, park name, and park ID)
+- Cleaned data mainly using grepl() function
+  - for some variables, people were allowed to write additional comments
+
+## Our Dataset (cont.)
+
+- Park Dataset:
+  - Park conditions (boolean: calm or busy)
+  - Area name: area where the park is located (upper manhattan, central manhattan, lower manhattan, or brooklyn)
+  - Area ID: A, B, C, or D assigned to an area name
+  - Park name: name of the park
+  - Park ID: 1-24 assigned to park names
+  - Number of squirrels: squirrel count at specific park
+  - Litter (some, none, abundant)
+
+## Our Dataset (cont.)
+
+- Squirrel Dataset:
+  - Area name, Area ID, Park name, Park ID
+  - Primary fur color: gray, black, or cinnamon
+  - Squirrel longitude: longitude coordinate for observed squirrel
+  - Squirrel latitude: latitude coordinate for observed squirrel
+  - Interactions with Humans: approaches, indifferent, or runs from
+  - Activities: value is either “running”, “chasing”, “climbing”, or “foraging” 
+  - Location: location when first sighted (value is either “ground plane”, “above ground”, or specific location)
+
+## Our Dataset (cont.)
+
+- Park Info Dataset:
+  - Park name
+  - Park ID
+  - Total acres
+  - Acres of natural areas
+  - Number of mapped trees
+- Helped us group parks
+- We manually created the following variables:
+  - Squirrel Rate: Number of Squirrels / Total Acres
+  - Rate Group: Quantiles of Squirrel Rate
+  - Park Size: Quantiles of Total Acres
+
+## Atmosphere/ambiance: Stacked Barplot
+
+```{r, echo=FALSE, message=FALSE}
+interaction_counts <- full_data %>%
+  group_by(Park.Conditions, Rate.Group, Interactions.with.Humans) %>%
+  summarise(count = n()) %>%
+  filter(!is.na(Park.Conditions))
+
+ggplot(interaction_counts, aes(x = Park.Conditions, y = count, fill = Interactions.with.Humans)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Rate.Group, scales = "free_x") +
+  labs(title = "Squirrel-Human Interactions by Park Condition (Grouped by Squirrel Rate)",
+       x = "Park", y = "Count") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Atmosphere/ambiance: Heatmap
+
+```{r , echo=FALSE, message=FALSE}
+animals_long <- full_data %>%
+  separate_rows(Cleaned.Animal.Sightings, sep = ",\\s*") %>%
+  group_by(Cleaned.Animal.Sightings, Interactions.with.Humans) %>%
+  summarise(count = n()) %>%
+  filter(!is.na(Cleaned.Animal.Sightings) & Cleaned.Animal.Sightings != "")
+
+ggplot(animals_long, aes(x = Cleaned.Animal.Sightings, y = Interactions.with.Humans, fill = count)) +
+  geom_tile() +
+  labs(title = "Heatmap: Interactions vs. Other Animal Sightings",
+       x = "Other Animal Sightings", y = "Squirrel-Human Interaction") +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Environment: Heatmap
+
+```{r , echo=FALSE, message=FALSE}
+full_data$Total.Acres <- as.numeric(full_data$Total.Acres)
+
+full_data <- full_data %>% 
+  filter(!is.na(Total.Acres)) %>%
+  mutate(Park.Size = cut(Total.Acres, breaks = quantile(Total.Acres, probs = c(0, 1/3, 2/3, 1)), labels = c("Small", "Medium", "Large")))
+
+environment_heatmap_data <- full_data %>%
+  group_by(Litter, Interactions.with.Humans, Park.Size) %>%
+  summarise(Tot.count = n()) %>%
+  filter(!is.na(Park.Size))
+
+ggplot(environment_heatmap_data, aes(x = Interactions.with.Humans, y = Litter, fill = Tot.count)) + geom_tile() + labs(x = "Squirrel-Human Interaction", y = "Litter Presence", fill = "Number of Observations", title = "Environmental Factors: Heatmap of Park Size and Litter Presence") + theme_minimal() + scale_fill_gradient(low = "brown", high = "green3") + geom_text(aes(label = paste(Tot.count)), size = 3) + facet_wrap(~Park.Size) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+## Environment: Heatmap (cont.)
+
+```{r , echo = FALSE, message = FALSE}
+# sorts them by park rate
+
+environment_heatmap_data <- full_data %>%
+  group_by(Litter, Interactions.with.Humans, Rate.Group) %>%
+  summarise(Tot.count = n()) %>%
+  filter(!is.na(Rate.Group))
+
+ggplot(environment_heatmap_data, aes(x = Interactions.with.Humans, y = Litter, fill = Tot.count)) + geom_tile() + labs(x = "Squirrel-Human Interaction", y = "Litter Presence", fill = "Number of Observations", title = "Environmental Factors: Heatmap by Rate Group") + theme_minimal() + scale_fill_gradient(low = "brown", high = "green3") + geom_text(aes(label = paste(Tot.count)), size = 3) + facet_wrap(~Rate.Group)
+```
+
+## Squirrel Map: Shiny App
+
+- Parks in Lower Manhattan tend to be busier than parks in Upper Manhattan.
+  - We also observe that squirrels in Lower Manhattan are more likely to approach humans than those in Upper Manhattan.
+- Many had missing data for longitude and latitude, so we estimated using different methods.
+- [https://admedeiros.shinyapps.io/Final_Project/](https://admedeiros.shinyapps.io/Final_Project/)
+
+
+
