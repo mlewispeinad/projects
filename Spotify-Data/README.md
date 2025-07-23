@@ -1,1 +1,1 @@
-
+This project explores how Spotify uses song data to personalize music recommendations. Using the Spotify API and the spotifyr package in R, I analyzed several audio features that Spotify measures for each track, such as danceability, energy, and valence. This project helped me understand how Spotify’s algorithms group songs and make suggestions to users based on listening habits. The project also provides step-by-step guidance for anyone interested in starting their own analysis of music data.
