@@ -1,6 +1,6 @@
 ## Projects
 
-This is a compilation of my personal projects from 2022 to the present. It does not include projects completed as part of internships.
+This is a compilation of my personal projects. It does not include projects completed as part of internships.
 
 ### 2025
 - Squirrel Census Analysis [<a href="https://github.com/mlewispeinad/projects/blob/main/squirrel-census/presentation.Rmd">Rmd</a>]
