@@ -1,1 +1,1 @@
-
+This project investigates how squirrel-human interactions vary across New York City parks, using data from the Squirrel Census and supplementary park information. I compiled and merged multiple datasets and performed extensive data cleaning/wrangling to prepare variables for analysis. I also created key plots showing how squirrel behavior relates to park atmosphere and ambiance. These analyses help us understand how urban environments influence wildlife interactions. 
