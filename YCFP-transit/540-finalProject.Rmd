@@ -1,0 +1,141 @@
+---
+title: "Exploring transit use and behavior change"
+author: "Mila Lewis-Peinado"
+date: "2025-12-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(glmnet)
+library(pROC)
+data <- read_csv("Data_-_Fare_free_transit_for_youth_-_exploring_transit_use_and_behavior_change.csv")
+
+# https://datadryad.org/dataset/doi:10.5061/dryad.612jm64fn#readme
+```
+
+# Introduction 
+
+  Young people have become an increasingly important group of public transit users in the twenty-first century, yet teenagers still face notable barriers to reliable and affordable transportation. For many adolescents, mobility is essential for education and social participation. Recognizing these challenges, the Santa Cruz Metropolitan Transit District (Santa Cruz METRO) launched the Youth Cruz Free program in March 2023, allowing school-aged youth to ride local buses for free. The initiative aims to reduce families’ financial burdens while fostering lifelong habits of sustainable travel. This analysis investigates how the program has influenced teenagers’ travel behavior and identifies the factors most predictive of increased bus ridership.
+
+  The dataset includes two waves of surveys distributed to high school students and recent graduates in Santa Cruz County. It comprises 392 responses and 127 variables covering demographics, lifestyle patterns, travel behavior, and perceptions of transit accessibility. Preliminary analysis revealed variation in ridership by demographic and access factors: Hispanic/Latinx students reported higher usage than White students, while car access and having a driver’s license corresponded with lower METRO use. Initial ANOVA and chi-squared tests suggested that while some demographic and access variables significantly influence transit use, others did not align with expectations. Building on these foundations, this project applies different techniques to identify the strongest predictors of whether the Youth Cruz Free program increased student ridership, deepening understanding of how fare-free transit can shape sustainable travel habits among youth.
+  
+
+# Demonstration
+
+  The key outcome variable, free.more.often, is a binary indicator coded “yes” if a student agreed or strongly agreed that they rode METRO more often because of the free pass, and “no” otherwise. Although self-reported rather than behaviorally tracked, this measure serves as a proxy for program impact. From the original 127 predictors, extensive preprocessing and subsetting were conducted. Variables with high missingness or near-constant values were removed, as were overly detailed categorical variables collapsed into broader interpretable groups (e.g., “often” vs. “not often”). Priority was given to variables theoretically relevant to transit behavior, covering demographics, car access, school and job activity, and perceptions of accessibility to retain a balanced mix of behavioral and perceptual predictors. This refined feature set provided a cleaner, interpretable foundation for modeling.
+
+```{r variables}
+# coding outcome variables, making them into factors so i can run lasso
+data$free.more.often <- ifelse(data$free.more.often %in% c("Somewhat Agree", "Strongly agree"), "yes", "no")
+data$free.more.often <- factor(data$free.more.often, levels = c("no", "yes"))
+```
+
+
+```{r prep data}
+# Group variables into "often" and "not often" for activities
+data$job_freq_grouped <- ifelse(data$freq.job.ty %in% c("3-4 times a week", "5 or more times a week"), "often", "not_often")
+data$sportatschool_grouped <- ifelse(data$freq.sportatschool.ty %in% c("3-4 times a week", "5 or more times a week"), "often", "not_often")
+data$sport_notschool_grouped <- ifelse(data$freq.sport.notschool.ty %in% c("3-4 times a week", "5 or more times a week"), "often", "not_often")
+data$extracurricular_grouped <- ifelse(data$freq.extracurricular.ty %in% c("3-4 times a week", "5 or more times a week"), "often", "not_often")
+
+# Group gender into three categories
+data$gender_grouped <- ifelse(data$gender %in% c("Cisgender,Boy / Man", "Cisgender,Girl / Woman"), "Cisgender", 
+                             ifelse(data$gender %in% c("Nonbinary", "Transgender", "Gender Fluid", "Other:"), "Gender Minority", "Other"))
+
+# Define new predictors list
+predictors_grouped <- c(
+  "ride.during",
+  "gender_grouped",
+  "license",
+  "employed",
+  "bus.stop.walk",
+  "school.days.ty",
+  "time.to.school",
+  "job_freq_grouped",
+  "sportatschool_grouped",
+  "sport_notschool_grouped",
+  "extracurricular_grouped"
+)
+
+#prepping for analysis
+data2 <- data[, c("free.more.often", predictors_grouped)]
+data_complete <- na.omit(data2)
+
+data_complete$free.more.often <- factor(data_complete$free.more.often, levels = c("no", "yes"))
+
+formula <- as.formula(paste("free.more.often ~", paste(predictors_grouped, collapse = " + ")))
+X <- model.matrix(formula, data_complete)[, -1]
+y <- data_complete$free.more.often
+```
+
+  LASSO, Ridge, and Elastic Net were implemented. LASSO applies an absolute-value penalty that can shrink some coefficients to zero, selecting key predictors. Ridge regression stabilizes coefficients when predictors are correlated and Elastic Net blends both penalties. Standard logistic regression assumptions were evaluated in relation to the survey data. Because each response represents an individual case with no clustering by school or household, independence is reasonable. Logistic models assume continuous predictors have a linear relationship with the log-odds of the outcome. Most variables here are categorical or binary, reducing this concern, though ordinal perception scales may deviate from linearity. Grouping these into simpler categories mitigated that risk. Correlated variables such as school and work frequency measures were managed effectively through regularization. The main modeling challenge was class imbalance; “yes” responses were substantially fewer than “no.” To address this, adjusted probability thresholds (0.20–0.25) improved model sensitivity without substantially increasing false positives.
+  
+  Model performance was assessed using 10-fold cross-validation. Model performance was compared primarily through AUC (Area Under the ROC Curve) and classification tables. The AUC measures overall discriminative ability, while classification tables compare predicted versus observed outcomes at chosen thresholds.
+
+
+```{r lasso}
+set.seed(16)
+# lasso w/ k-fold cross validation
+cvfit <- cv.glmnet(X, y, family = "binomial", alpha = 1)
+exp(coef(cvfit, s = "lambda.min"))
+
+prob_lasso <- predict(cvfit, X, type="response", s="lambda.min")
+roc_lasso <- roc(y, as.numeric(prob_lasso))
+pred <- ifelse(prob_lasso > 0.5, "yes", "no")
+table(Predicted = pred, Actual = y)
+auc(roc_lasso)
+```
+
+
+
+```{r ridge and enet}
+# ridge and elastic net, trying bc predictors could be correlated which makes lasso unstable
+
+cv_enet <- cv.glmnet(X, y, family = "binomial", alpha = 0.5)
+cv_ridge <- cv.glmnet(X, y, family = "binomial", alpha = 0)
+
+coef(cv_enet, s = "lambda.min")
+coef(cv_ridge, s = "lambda.min")
+
+prob_enet <- predict(cv_enet, X, type="response", s="lambda.min")
+roc_enet <- roc(y, as.numeric(prob_enet))
+pred_enet <- ifelse(prob_enet > 0.5, "yes", "no")
+table(Predicted = pred_enet, Actual = y)
+auc(roc_enet)
+
+prob_ridge <- predict(cv_ridge, X, type="response", s="lambda.min")
+roc_ridge <- roc(y, as.numeric(prob_ridge))
+pred_ridge <- ifelse(prob_ridge > 0.5, "yes", "no")
+table(Predicted = pred_ridge, Actual = y)
+auc(roc_ridge)
+```
+
+
+```{r lower threshold}
+# not any yes', Outcome is extremely imbalanced → 12 yes / 152 total
+# Default threshold = 0.5 will predict no almost always
+# A threshold of 0.20–0.25 provided the best balance between sensitivity (detecting students who increased METRO use) and specificity.
+
+pred <- ifelse(prob_lasso > 0.25, "yes", "no")
+table(Predicted = pred, Actual = y)
+auc(roc_lasso)
+
+pred_enet <- ifelse(prob_enet > 0.25, "yes", "no")
+table(Predicted = pred_enet, Actual = y)
+auc(roc_enet)
+
+pred_ridge <- ifelse(prob_ridge > 0.25, "yes", "no")
+table(Predicted = pred_ridge, Actual = y)
+auc(roc_ridge)
+```
+
+# Discussion
+
+  The models identified several predictors that were meaningfully associated with whether students reported using Santa Cruz METRO more often after the Youth Cruz Free program began. Among the strongest positive predictors, students who already rode the METRO during the program period were considerably more likely to report increased use. This result is intuitive; students with previous experience using the bus likely faced fewer barriers and were more prepared to take advantage of free rides. Frequent work activity also appeared as a positive predictor across multiple models, suggesting that students balancing school and part-time jobs rely on public transit to reach workplaces, and that fare-free programs can significantly reduce their transportation burden. On the other hand, several negative associations emerged. Students who attended school fewer days per week were less likely to report increased use. This pattern may indicate that students with flexible or hybrid attendance schedules have fewer travel demands overall, reducing their incentive to use public transit more frequently. Similarly, those who participated in school sports often were less likely to increase usage. One interpretation is that student-athletes may already depend on carpools, family rides, or after-school transport provided by schools. Although a few demographic variables, such as gender and license status, appeared in some models, their coefficients were generally unstable or small after cross-validation. This reinforces findings from the original study; behavioral and access-related factors seem far more predictive of ridership change than baseline demographics.
+  
+  All three models achieved moderate predictive accuracy, with AUC values ranging from 0.74 to 0.83. Adjusting the prediction threshold to 0.25 substantially improved sensitivity, balancing the detection of “yes” cases with the risk of false positives. Interpretation of model coefficients is something we should remain mindful of as self-reported increase in ridership is not a direct behavioral measure. The patterns observed are best viewed as correlational indicators of which student characteristics are most associated with the program’s success.
+  
+  Several data and design limitations constrain what can be inferred from this analysis. Most importantly, the survey provides a single post-program snapshot, which prevents any strong claims about causality. Self-reported increases may capture students’ perceptions rather than their actual travel behavior. If more time and resources were available, future research should aim to collect larger and longitudinal samples that track students before and after program implementation. It could also be interesting to link survey responses with METRO card data to validate self-reported behavior against actual bus-use records. 
+  
